@@ -33,6 +33,10 @@ function App() {
   const [note, setNote] = useState(null);
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef(null);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth > 820;
+  });
 
   const day = TRAVEL_DATA.days[activeDay];
 
@@ -69,11 +73,13 @@ function App() {
   }, []);
 
   const handleDayChange = (index) => {
+    setMobilePanelOpen(true);
     setActiveDay(index);
     setActiveItem(TRAVEL_DATA.days[index].items[0]);
   };
 
   const handleSelect = useCallback((item) => {
+    setMobilePanelOpen(true);
     setActiveItem(item);
   }, []);
 
@@ -149,7 +155,21 @@ function App() {
       </header>
 
       <main className="layout">
-        <aside className="panel" aria-label="旅行时间轴">
+        <aside
+          className={`panel${mobilePanelOpen ? " is-expanded" : " is-collapsed"}`}
+          aria-label="旅行时间轴"
+        >
+          <button
+            className="panel-handle"
+            type="button"
+            aria-expanded={mobilePanelOpen}
+            onClick={() => setMobilePanelOpen((current) => !current)}
+          >
+            <span className="panel-handle-bar" aria-hidden="true" />
+            <span className="panel-handle-text">
+              {mobilePanelOpen ? "收起行程" : "查看行程"}
+            </span>
+          </button>
           <DayTabs
             days={TRAVEL_DATA.days}
             activeDay={activeDay}
