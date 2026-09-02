@@ -33,12 +33,36 @@ function App() {
   const [note, setNote] = useState(null);
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef(null);
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.innerWidth > 820;
+  const [isMobileView, setIsMobileView] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 820;
   });
+  const [panelHeight, setPanelHeight] = useState(() => {
+    if (typeof window === "undefined" || window.innerWidth > 820) return undefined;
+    return Math.round(window.innerHeight * 0.52);
+  });
+  const [panelDragging, setPanelDragging] = useState(false);
+  const panelRef = useRef(null);
+  const dragStateRef = useRef(null);
+  const wasDraggedRef = useRef(false);
 
   const day = TRAVEL_DATA.days[activeDay];
+
+  const getPanelLimits = useCallback(() => {
+    if (typeof window === "undefined") return { min: 320, max: 640 };
+    const headerHeight = 62;
+    const min = Math.round(window.innerHeight * 0.5);
+    const max = Math.max(min, window.innerHeight - headerHeight - 12);
+    return { min, max };
+  }, []);
+
+  const clampPanelHeight = useCallback(
+    (value) => {
+      const { min, max } = getPanelLimits();
+      return Math.min(max, Math.max(min, value));
+    },
+    [getPanelLimits]
+  );
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -57,6 +81,19 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    const handleResize = () => {
+      const nextMobile = window.innerWidth <= 820;
+      setIsMobileView(nextMobile);
+      if (nextMobile) {
+        setPanelHeight((current) => clampPanelHeight(current || getPanelLimits().min));
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [clampPanelHeight, getPanelLimits]);
+
+  useEffect(() => {
     if (!activeItem) return;
     const element = document.getElementById(activeItem.id);
     element?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -73,15 +110,61 @@ function App() {
   }, []);
 
   const handleDayChange = (index) => {
-    setMobilePanelOpen(true);
     setActiveDay(index);
     setActiveItem(TRAVEL_DATA.days[index].items[0]);
   };
 
   const handleSelect = useCallback((item) => {
-    setMobilePanelOpen(true);
     setActiveItem(item);
   }, []);
+
+  const getClientY = (event) => {
+    return event.touches?.[0]?.clientY ?? event.clientY ?? 0;
+  };
+
+  const beginPanelDrag = (event) => {
+    if (!isMobileView) return;
+    const { min } = getPanelLimits();
+    dragStateRef.current = {
+      startY: getClientY(event),
+      startHeight: panelHeight || min
+    };
+    wasDraggedRef.current = false;
+    setPanelDragging(true);
+    if (event.currentTarget.setPointerCapture && event.pointerId !== undefined) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  };
+
+  const movePanelDrag = (event) => {
+    const state = dragStateRef.current;
+    if (!state) return;
+    const currentY = getClientY(event);
+    const delta = state.startY - currentY;
+    if (Math.abs(delta) > 6) wasDraggedRef.current = true;
+    setPanelHeight(clampPanelHeight(state.startHeight + delta));
+  };
+
+  const endPanelDrag = () => {
+    if (!dragStateRef.current) return;
+    const { min, max } = getPanelLimits();
+    const midpoint = (min + max) / 2;
+    setPanelHeight((current) => (current >= midpoint ? max : min));
+    dragStateRef.current = null;
+    setPanelDragging(false);
+  };
+
+  const togglePanelHeight = () => {
+    if (wasDraggedRef.current) {
+      wasDraggedRef.current = false;
+      return;
+    }
+    const { min, max } = getPanelLimits();
+    setPanelHeight((current) => {
+      const safeCurrent = current || min;
+      return safeCurrent >= max - 20 ? min : max;
+    });
+  };
 
   const handleNavOption = (type) => {
     if (!navItem) return;
@@ -132,6 +215,9 @@ function App() {
     setTheme((current) => (current === "md" ? "apple" : "md"));
   };
 
+  const { min: minPanelHeight, max: maxPanelHeight } = getPanelLimits();
+  const panelIsFull = Boolean(panelHeight && panelHeight >= maxPanelHeight - 20);
+
   return (
     <>
       <header className="topbar">
@@ -156,18 +242,25 @@ function App() {
 
       <main className="layout">
         <aside
-          className={`panel${mobilePanelOpen ? " is-expanded" : " is-collapsed"}`}
+          ref={panelRef}
+          className={`panel${isMobileView ? " mobile-panel" : ""}${panelDragging ? " is-dragging" : ""}`}
+          style={isMobileView ? { height: `${panelHeight}px` } : undefined}
           aria-label="旅行时间轴"
         >
           <button
             className="panel-handle"
             type="button"
-            aria-expanded={mobilePanelOpen}
-            onClick={() => setMobilePanelOpen((current) => !current)}
+            aria-expanded={panelIsFull}
+            aria-label="拖动或点击调整行程面板高度"
+            onPointerDown={beginPanelDrag}
+            onPointerMove={movePanelDrag}
+            onPointerUp={endPanelDrag}
+            onPointerCancel={endPanelDrag}
+            onClick={togglePanelHeight}
           >
             <span className="panel-handle-bar" aria-hidden="true" />
             <span className="panel-handle-text">
-              {mobilePanelOpen ? "收起行程" : "查看行程"}
+              {panelIsFull ? "向下拖到半屏" : "向上拖到全屏"}
             </span>
           </button>
           <DayTabs

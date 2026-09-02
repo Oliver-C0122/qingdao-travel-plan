@@ -889,21 +889,20 @@ a:focus-visible {
     bottom: 0;
     z-index: 900;
     height: var(--mobile-panel-h);
-    transform: translateY(0);
     border-right: none;
     border-top: 1px solid var(--border);
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.12);
-    transition: transform 0.24s ease;
+    transition: height 0.2s ease;
+    will-change: height;
   }
 
-  .panel.is-collapsed {
-    height: var(--mobile-panel-peek);
-    transform: translateY(calc(100% - var(--mobile-panel-peek)));
+  .panel.is-dragging {
+    transition: none;
   }
 
-  .panel.is-collapsed > :not(.panel-handle) {
-    display: none;
+  .panel.mobile-panel {
+    touch-action: none;
   }
 
   .panel-handle {
@@ -917,9 +916,16 @@ a:focus-visible {
     border: 0;
     background: transparent;
     cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     font-size: 12px;
     font-weight: 700;
     color: var(--text-secondary);
+  }
+
+  .panel.is-dragging .panel-handle {
+    cursor: grabbing;
   }
 
   .panel-handle-bar {
@@ -929,7 +935,7 @@ a:focus-visible {
     background: var(--border-strong);
   }
 
-  .panel.is-expanded .panel-handle {
+  .panel.mobile-panel .panel-handle {
     color: var(--text);
   }
 
@@ -962,6 +968,8 @@ a:focus-visible {
   .timeline {
     padding: 14px 12px 28px;
     min-height: 0;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
 
